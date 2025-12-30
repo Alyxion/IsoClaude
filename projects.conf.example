@@ -1,0 +1,13 @@
+# IsoClaude Project Mounts Configuration
+# Copy this file to projects.conf and customize
+#
+# Format: /path/to/project:include_git
+#   - include_git: true = mount .git folder, false = exclude .git
+#
+# Examples:
+# /Users/yourname/projects/MyApp:false
+# /Users/yourname/projects/OpenSource:true
+#
+# Projects are mounted to /projects/<folder_name> in the container
+
+# Add your projects below:
