@@ -6,6 +6,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 PROJECTS_CONF="$SCRIPT_DIR/projects.conf"
 
+# Check if projects.conf is newer than docker-compose.yml
+conf_changed() {
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        return 0  # No compose file, needs generation
+    fi
+    if [[ ! -f "$PROJECTS_CONF" ]]; then
+        return 1  # No conf file, nothing to do
+    fi
+    # Compare modification times: conf newer than compose?
+    [[ "$PROJECTS_CONF" -nt "$COMPOSE_FILE" ]]
+}
+
+# Auto-regenerate if conf changed
+auto_regenerate() {
+    if conf_changed; then
+        echo "Detected changes in projects.conf, regenerating docker-compose.yml..."
+        generate_compose
+    fi
+}
+
 generate_compose() {
     echo "Generating docker-compose.yml from projects.conf..."
 
@@ -30,7 +50,7 @@ services:
       - ubuntu-var:/var
       - ubuntu-root:/root
       # Setup script
-      - ./setup-container.sh:/setup-container.sh:ro
+      - ./scripts/setup-container.sh:/setup-container.sh:ro
 HEADER
 
     # Parse projects.conf and add mounts
@@ -79,6 +99,7 @@ VOLUMES
 }
 
 cmd_up() {
+    auto_regenerate
     if [[ ! -f "$COMPOSE_FILE" ]]; then
         generate_compose
     fi
@@ -103,6 +124,180 @@ cmd_regenerate() {
     echo "Restart with: ./isoclaude.sh down && ./isoclaude.sh up"
 }
 
+# --- Project management commands ---
+
+ensure_projects_conf() {
+    if [[ ! -f "$PROJECTS_CONF" ]]; then
+        echo "Creating projects.conf..."
+        cat > "$PROJECTS_CONF" << 'EOF'
+# IsoClaude Project Mounts Configuration
+# Format: /path/to/project:include_git (true/false)
+# Projects are mounted to /projects/<folder_name> in the container
+
+EOF
+    fi
+}
+
+cmd_projects_list() {
+    if [[ ! -f "$PROJECTS_CONF" ]]; then
+        echo "No projects.conf found. Add a project with:"
+        echo "  ./isoclaude.sh projects:add /path/to/project"
+        return 0
+    fi
+
+    local count=0
+    echo "Configured projects:"
+    echo ""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+
+        path="${line%%:*}"
+        include_git="${line##*:}"
+        folder_name="$(basename "$path")"
+
+        if [[ "$include_git" == "true" ]]; then
+            git_status="(with .git)"
+        else
+            git_status="(no .git)"
+        fi
+
+        echo "  $folder_name"
+        echo "    Path: $path"
+        echo "    Git:  $git_status"
+        echo ""
+        ((count++))
+    done < "$PROJECTS_CONF"
+
+    if [[ $count -eq 0 ]]; then
+        echo "  No projects configured."
+        echo ""
+        echo "Add a project with:"
+        echo "  ./isoclaude.sh projects:add /path/to/project"
+    else
+        echo "Total: $count project(s)"
+    fi
+}
+
+cmd_projects_add() {
+    local path="$1"
+    local include_git="${2:-false}"
+
+    if [[ -z "$path" ]]; then
+        echo "Usage: ./isoclaude.sh projects:add <path> [include_git]"
+        echo ""
+        echo "Arguments:"
+        echo "  path         Absolute path to the project directory"
+        echo "  include_git  true or false (default: false)"
+        echo ""
+        echo "Examples:"
+        echo "  ./isoclaude.sh projects:add /Users/you/projects/MyApp"
+        echo "  ./isoclaude.sh projects:add /Users/you/projects/OpenSource true"
+        return 1
+    fi
+
+    # Validate path exists
+    if [[ ! -d "$path" ]]; then
+        echo "Error: Directory does not exist: $path"
+        return 1
+    fi
+
+    # Normalize path (resolve symlinks, remove trailing slash)
+    path="$(cd "$path" && pwd)"
+
+    # Validate include_git value
+    if [[ "$include_git" != "true" && "$include_git" != "false" ]]; then
+        echo "Error: include_git must be 'true' or 'false', got: $include_git"
+        return 1
+    fi
+
+    ensure_projects_conf
+
+    # Check if already exists
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+        existing_path="${line%%:*}"
+        if [[ "$existing_path" == "$path" ]]; then
+            echo "Error: Project already configured: $path"
+            echo "Remove it first with: ./isoclaude.sh projects:remove \"$path\""
+            return 1
+        fi
+    done < "$PROJECTS_CONF"
+
+    # Add to config
+    echo "$path:$include_git" >> "$PROJECTS_CONF"
+
+    folder_name="$(basename "$path")"
+    echo "Added project: $folder_name"
+    echo "  Path: $path"
+    echo "  Git:  $([ "$include_git" == "true" ] && echo "included" || echo "excluded")"
+    echo ""
+    echo "Regenerate and restart to apply:"
+    echo "  ./isoclaude.sh down && ./isoclaude.sh up"
+}
+
+cmd_projects_remove() {
+    local target="$1"
+
+    if [[ -z "$target" ]]; then
+        echo "Usage: ./isoclaude.sh projects:remove <path|name>"
+        echo ""
+        echo "Arguments:"
+        echo "  path|name    Full path or folder name of the project"
+        echo ""
+        echo "Examples:"
+        echo "  ./isoclaude.sh projects:remove /Users/you/projects/MyApp"
+        echo "  ./isoclaude.sh projects:remove MyApp"
+        return 1
+    fi
+
+    if [[ ! -f "$PROJECTS_CONF" ]]; then
+        echo "Error: No projects.conf found"
+        return 1
+    fi
+
+    # Find and remove the project
+    local found=0
+    local temp_file="$PROJECTS_CONF.tmp"
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Keep comments and empty lines
+        if [[ "$line" =~ ^#.*$ || -z "$line" ]]; then
+            echo "$line" >> "$temp_file"
+            continue
+        fi
+
+        path="${line%%:*}"
+        folder_name="$(basename "$path")"
+
+        # Match by full path or folder name
+        if [[ "$path" == "$target" || "$folder_name" == "$target" ]]; then
+            found=1
+            echo "Removed project: $folder_name"
+            echo "  Path: $path"
+        else
+            echo "$line" >> "$temp_file"
+        fi
+    done < "$PROJECTS_CONF"
+
+    mv "$temp_file" "$PROJECTS_CONF"
+
+    if [[ $found -eq 0 ]]; then
+        echo "Error: Project not found: $target"
+        echo ""
+        echo "List configured projects with:"
+        echo "  ./isoclaude.sh projects:list"
+        return 1
+    fi
+
+    echo ""
+    echo "Regenerate and restart to apply:"
+    echo "  ./isoclaude.sh down && ./isoclaude.sh up"
+}
+
+cmd_claude() {
+    "$SCRIPT_DIR/claude-launch.sh" "$@"
+}
+
 cmd_help() {
     cat << 'HELP'
 IsoClaude - Isolated Ubuntu Desktop for Claude Development
@@ -110,21 +305,31 @@ IsoClaude - Isolated Ubuntu Desktop for Claude Development
 Usage: ./isoclaude.sh <command>
 
 Commands:
-  up          Start the container (generates compose file if needed)
-  down        Stop the container (data persists)
-  setup       Install Python 3.12/3.13, Poetry, Claude CLI (first time)
-  regenerate  Regenerate docker-compose.yml from projects.conf
-  help        Show this help
+  up              Start the container (generates compose file if needed)
+  down            Stop the container (data persists)
+  setup           Install Python 3.12/3.13, Poetry, Claude CLI (first time)
+  regenerate      Regenerate docker-compose.yml from projects.conf
+  claude [args]   Launch Claude in a project (pass args like --resume)
+  help            Show this help
 
-Configuration:
-  Edit projects.conf to add/remove project mounts
-  Format: /path/to/project:include_git (true/false)
+Project Management:
+  projects:list   List all configured projects
+  projects:add    Add a project mount
+  projects:remove Remove a project mount
 
 Examples:
-  ./isoclaude.sh up           # Start container
-  ./isoclaude.sh setup        # Install dev tools
-  ./isoclaude.sh regenerate   # After editing projects.conf
-  ./isoclaude.sh down         # Stop (data persists)
+  ./isoclaude.sh up                              # Start container
+  ./isoclaude.sh setup                           # Install dev tools
+  ./isoclaude.sh claude                          # Launch Claude (interactive)
+  ./isoclaude.sh claude --resume                 # Resume previous session
+  ./isoclaude.sh claude -p "fix the tests"       # Start with a prompt
+
+  ./isoclaude.sh projects:list                   # Show configured projects
+  ./isoclaude.sh projects:add ~/projects/MyApp   # Add project (no .git)
+  ./isoclaude.sh projects:add ~/projects/OSS true  # Add with .git access
+  ./isoclaude.sh projects:remove MyApp           # Remove by name
+
+  ./isoclaude.sh down && ./isoclaude.sh up       # Restart after changes
 HELP
 }
 
@@ -134,6 +339,10 @@ case "${1:-help}" in
     down) cmd_down ;;
     setup) cmd_setup ;;
     regenerate) cmd_regenerate ;;
+    claude) shift; cmd_claude "$@" ;;
+    projects:list) cmd_projects_list ;;
+    projects:add) cmd_projects_add "$2" "$3" ;;
+    projects:remove) cmd_projects_remove "$2" ;;
     help|--help|-h) cmd_help ;;
     *) echo "Unknown command: $1"; cmd_help; exit 1 ;;
 esac

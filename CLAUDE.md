@@ -6,8 +6,8 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 
 ## Key Files
 
-- `isoclaude.sh` - Main control script (up/down/setup/regenerate)
-- `setup-container.sh` - Dev tools installer run inside container
+- `isoclaude.sh` - Main control script (up/down/setup/regenerate/projects:*)
+- `scripts/setup-container.sh` - Dev tools installer run inside container
 - `projects.conf` - User's project mount configuration (gitignored)
 - `projects.conf.example` - Template for new users
 - `docker-compose.yml` - Generated file (gitignored)
@@ -51,7 +51,7 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 - Update help text in `cmd_help()`
 - Test with both new and existing setups
 
-### Changing setup-container.sh
+### Changing scripts/setup-container.sh
 - Script runs as root inside container
 - Poetry installs to `/config/.local/bin`
 - Consider idempotency (script may run multiple times)
