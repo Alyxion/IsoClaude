@@ -102,6 +102,7 @@ By default, IsoClaude excludes `.git` folders—Claude works on your code but ca
 | `./isoclaude.sh up` | Start the container |
 | `./isoclaude.sh down` | Stop the container (data persists) |
 | `./isoclaude.sh setup` | Install Python, Poetry, Rust, Node, Claude CLI |
+| `./isoclaude.sh bash` | Connect to container bash shell |
 | `./isoclaude.sh claude [args]` | Launch Claude in a project |
 | `./claude-launch.sh [args]` | Direct launcher (same as above) |
 | `./isoclaude.sh projects:list` | Show configured projects |
@@ -126,7 +127,7 @@ After `./isoclaude.sh setup`:
 |--------|---------|-------|
 | Desktop | http://localhost:3000 | Full KDE in browser |
 | SSH | `ssh abc@localhost -p 2222` | Password: `isoclaude` |
-| Shell | `docker exec -it iso-claude-ubuntu bash` | Direct access |
+| Shell | `./isoclaude.sh bash` | Direct access |
 
 > **First thing**: Change the default SSH password with `passwd`
 

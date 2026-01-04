@@ -298,6 +298,10 @@ cmd_claude() {
     "$SCRIPT_DIR/claude-launch.sh" "$@"
 }
 
+cmd_bash() {
+    docker exec -it iso-claude-ubuntu bash
+}
+
 cmd_help() {
     cat << 'HELP'
 IsoClaude - Isolated Ubuntu Desktop for Claude Development
@@ -309,6 +313,7 @@ Commands:
   down            Stop the container (data persists)
   setup           Install Python 3.12/3.13, Poetry, Claude CLI (first time)
   regenerate      Regenerate docker-compose.yml from projects.conf
+  bash            Connect to container bash shell
   claude [args]   Launch Claude in a project (pass args like --resume)
   help            Show this help
 
@@ -320,6 +325,7 @@ Project Management:
 Examples:
   ./isoclaude.sh up                              # Start container
   ./isoclaude.sh setup                           # Install dev tools
+  ./isoclaude.sh bash                            # Connect to bash shell
   ./isoclaude.sh claude                          # Launch Claude (interactive)
   ./isoclaude.sh claude --resume                 # Resume previous session
   ./isoclaude.sh claude -p "fix the tests"       # Start with a prompt
@@ -339,6 +345,7 @@ case "${1:-help}" in
     down) cmd_down ;;
     setup) cmd_setup ;;
     regenerate) cmd_regenerate ;;
+    bash) cmd_bash ;;
     claude) shift; cmd_claude "$@" ;;
     projects:list) cmd_projects_list ;;
     projects:add) cmd_projects_add "$2" "$3" ;;
