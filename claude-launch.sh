@@ -74,6 +74,7 @@ check_container() {
 declare -a PROJECT_NAMES
 declare -a PROJECT_PATHS
 declare -a PROJECT_GIT
+declare -a PROJECT_HOST_PATHS
 
 parse_projects() {
     local idx=0
@@ -89,8 +90,24 @@ parse_projects() {
         PROJECT_NAMES[$idx]="$folder_name"
         PROJECT_PATHS[$idx]="/projects/$folder_name"
         PROJECT_GIT[$idx]="$include_git"
+        PROJECT_HOST_PATHS[$idx]="$path"
         ((idx++))
     done < "$PROJECTS_CONF"
+}
+
+# Detect project from current working directory
+# Sets PROJECT_IDX if found, returns 0 on success, 1 on failure
+detect_project_from_cwd() {
+    local cwd="$(pwd)"
+
+    for i in "${!PROJECT_HOST_PATHS[@]}"; do
+        local host_path="${PROJECT_HOST_PATHS[$i]}"
+        if [[ "$cwd" == "$host_path" || "$cwd" == "$host_path"/* ]]; then
+            PROJECT_IDX=$i
+            return 0
+        fi
+    done
+    return 1
 }
 
 # Arrow key menu selection
@@ -224,8 +241,16 @@ main() {
     auto_regenerate
     check_container
     parse_projects
-    select_project
-    PROJECT_IDX=$SELECTED_IDX
+
+    # Try to auto-detect project from current directory
+    if detect_project_from_cwd; then
+        echo -e "${GREEN}Detected project: ${BOLD}${PROJECT_NAMES[$PROJECT_IDX]}${RESET}"
+    else
+        # No auto-detection, show picker
+        select_project
+        PROJECT_IDX=$SELECTED_IDX
+    fi
+
     select_mode
     launch_claude
 }

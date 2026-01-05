@@ -124,6 +124,121 @@ cmd_regenerate() {
     echo "Restart with: ./isoclaude.sh down && ./isoclaude.sh up"
 }
 
+# --- Project detection helpers ---
+
+# Detect project from current directory or argument
+# Sets PROJECT_NAME and PROJECT_PATH if found
+# Returns 0 if found, 1 if not
+detect_project() {
+    local arg="$1"
+    local cwd="$(pwd)"
+
+    PROJECT_NAME=""
+    PROJECT_PATH=""
+
+    [[ ! -f "$PROJECTS_CONF" ]] && return 1
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+
+        local host_path="${line%%:*}"
+        local folder_name="$(basename "$host_path")"
+        local container_path="/projects/$folder_name"
+
+        # If argument provided, match by name or path
+        if [[ -n "$arg" ]]; then
+            if [[ "$arg" == "$folder_name" || "$arg" == "$host_path" || "$arg" == "$container_path" ]]; then
+                PROJECT_NAME="$folder_name"
+                PROJECT_PATH="$container_path"
+                return 0
+            fi
+        # Otherwise, check if cwd is inside this project
+        elif [[ "$cwd" == "$host_path" || "$cwd" == "$host_path"/* ]]; then
+            PROJECT_NAME="$folder_name"
+            PROJECT_PATH="$container_path"
+            return 0
+        fi
+    done < "$PROJECTS_CONF"
+
+    return 1
+}
+
+# Interactive project selection with arrow keys
+select_project_interactive() {
+    local projects=()
+    local paths=()
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+        local host_path="${line%%:*}"
+        local folder_name="$(basename "$host_path")"
+        projects+=("$folder_name")
+        paths+=("/projects/$folder_name")
+    done < "$PROJECTS_CONF"
+
+    if [[ ${#projects[@]} -eq 0 ]]; then
+        echo "No projects configured. Add one with: ./isoclaude.sh projects:add /path/to/project"
+        return 1
+    fi
+
+    if [[ ${#projects[@]} -eq 1 ]]; then
+        PROJECT_NAME="${projects[0]}"
+        PROJECT_PATH="${paths[0]}"
+        return 0
+    fi
+
+    # Arrow key selection
+    local current=0
+    local count=${#projects[@]}
+
+    tput civis  # Hide cursor
+    trap 'tput cnorm' RETURN
+
+    while true; do
+        tput clear
+        echo ""
+        echo "Select Project (↑/↓ to navigate, Enter to select):"
+        echo ""
+
+        for i in "${!projects[@]}"; do
+            if [[ $i -eq $current ]]; then
+                echo "  ▶ ${projects[$i]}"
+            else
+                echo "    ${projects[$i]}"
+            fi
+        done
+
+        read -rsn1 key
+        if [[ "$key" == $'\x1b' ]]; then
+            read -rsn2 key
+            case "$key" in
+                '[A') ((current--)); [[ $current -lt 0 ]] && current=$((count - 1)) ;;
+                '[B') ((current++)); [[ $current -ge $count ]] && current=0 ;;
+            esac
+        elif [[ "$key" == "" ]]; then
+            PROJECT_NAME="${projects[$current]}"
+            PROJECT_PATH="${paths[$current]}"
+            tput cnorm
+            tput clear
+            return 0
+        fi
+    done
+}
+
+# Resolve project: from arg, from cwd, or interactive
+# Usage: resolve_project [project_name_or_path]
+resolve_project() {
+    if detect_project "$1"; then
+        return 0
+    elif [[ -n "$1" ]]; then
+        echo "Error: Project not found: $1"
+        echo "Run './isoclaude.sh projects:list' to see configured projects"
+        return 1
+    else
+        select_project_interactive
+    fi
+}
+
 # --- Project management commands ---
 
 ensure_projects_conf() {
@@ -299,7 +414,36 @@ cmd_claude() {
 }
 
 cmd_bash() {
-    docker exec -it iso-claude-ubuntu bash
+    local project="$1"
+    if resolve_project "$project"; then
+        echo "Connecting to $PROJECT_NAME..."
+        docker exec -it -w "$PROJECT_PATH" iso-claude-ubuntu bash
+    else
+        [[ -z "$project" ]] && return 1  # Interactive was cancelled or failed
+        exit 1
+    fi
+}
+
+cmd_code() {
+    local project="$1"
+    if resolve_project "$project"; then
+        echo "Opening VS Code in $PROJECT_NAME..."
+        code --remote ssh-remote+abc@localhost:2222 "$PROJECT_PATH"
+    else
+        [[ -z "$project" ]] && return 1
+        exit 1
+    fi
+}
+
+cmd_windsurf() {
+    local project="$1"
+    if resolve_project "$project"; then
+        echo "Opening Windsurf in $PROJECT_NAME..."
+        windsurf --remote ssh-remote+abc@localhost:2222 "$PROJECT_PATH"
+    else
+        [[ -z "$project" ]] && return 1
+        exit 1
+    fi
 }
 
 cmd_help() {
@@ -313,9 +457,14 @@ Commands:
   down            Stop the container (data persists)
   setup           Install Python 3.12/3.13, Poetry, Claude CLI (first time)
   regenerate      Regenerate docker-compose.yml from projects.conf
-  bash            Connect to container bash shell
+  bash [project]  Connect to container bash shell in project directory
+  code [project]  Open VS Code with SSH remote connection to project
+  windsurf [project]  Open Windsurf with SSH remote connection to project
   claude [args]   Launch Claude in a project (pass args like --resume)
   help            Show this help
+
+Note: bash/code/windsurf auto-detect project from current directory if you're
+inside a configured project path. Otherwise shows interactive picker.
 
 Project Management:
   projects:list   List all configured projects
@@ -325,10 +474,12 @@ Project Management:
 Examples:
   ./isoclaude.sh up                              # Start container
   ./isoclaude.sh setup                           # Install dev tools
-  ./isoclaude.sh bash                            # Connect to bash shell
+  ./isoclaude.sh bash                            # Bash shell (auto-detect or picker)
+  ./isoclaude.sh bash MyApp                      # Bash shell in specific project
+  ./isoclaude.sh code                            # VS Code (auto-detect or picker)
+  ./isoclaude.sh windsurf                        # Windsurf (auto-detect or picker)
   ./isoclaude.sh claude                          # Launch Claude (interactive)
   ./isoclaude.sh claude --resume                 # Resume previous session
-  ./isoclaude.sh claude -p "fix the tests"       # Start with a prompt
 
   ./isoclaude.sh projects:list                   # Show configured projects
   ./isoclaude.sh projects:add ~/projects/MyApp   # Add project (no .git)
@@ -345,7 +496,9 @@ case "${1:-help}" in
     down) cmd_down ;;
     setup) cmd_setup ;;
     regenerate) cmd_regenerate ;;
-    bash) cmd_bash ;;
+    bash) cmd_bash "$2" ;;
+    code) cmd_code "$2" ;;
+    windsurf) cmd_windsurf "$2" ;;
     claude) shift; cmd_claude "$@" ;;
     projects:list) cmd_projects_list ;;
     projects:add) cmd_projects_add "$2" "$3" ;;

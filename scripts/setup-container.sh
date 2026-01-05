@@ -86,24 +86,48 @@ echo "=== Setting up SSH server ==="
 apt-get install -y openssh-server
 mkdir -p /var/run/sshd
 
-# Configure SSH for the abc user (default webtop user)
-sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+# Create SSH config if it doesn't exist (some containers don't generate it)
+if [[ ! -f /etc/ssh/sshd_config ]]; then
+    mkdir -p /etc/ssh
+    cat > /etc/ssh/sshd_config <<EOF
+Port 22
+PermitRootLogin no
+PasswordAuthentication yes
+ChallengeResponseAuthentication no
+UsePAM yes
+X11Forwarding yes
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server
+EOF
+    # Generate host keys if missing
+    ssh-keygen -A
+else
+    # Configure SSH for the abc user (default webtop user)
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+fi
 
-# Set password for abc user if not already set (default: isoclaude)
+# Create sshd privilege separation user if missing
+if ! id -u sshd >/dev/null 2>&1; then
+    useradd -r -d /var/empty -s /usr/sbin/nologin sshd
+    mkdir -p /var/empty
+    chmod 755 /var/empty
+fi
+
+# Set password for abc user (default: isoclaude)
 echo "abc:isoclaude" | chpasswd
 
 # Ensure abc user has a proper shell
 usermod -s /bin/bash abc
 
 # Create startup script for SSH (linuxserver.io uses s6-overlay)
-# Scripts in /config/custom-cont-init.d are run on container start
 mkdir -p /config/custom-cont-init.d
-cat > /config/custom-cont-init.d/99-start-ssh << 'SSHSCRIPT'
+cat > /config/custom-cont-init.d/99-start-ssh <<'SSHSTARTUP'
 #!/bin/bash
 mkdir -p /var/run/sshd
 /usr/sbin/sshd
-SSHSCRIPT
+SSHSTARTUP
 chmod +x /config/custom-cont-init.d/99-start-ssh
 
 # Start SSH now
@@ -111,13 +135,11 @@ mkdir -p /var/run/sshd
 /usr/sbin/sshd || true
 
 echo "=== Verifying installations ==="
-echo "Python 3.12: $(python3.12 --version)"
-echo "Python 3.13: $(python3.13 --version)"
-echo "Poetry: $(/config/.local/bin/poetry --version 2>/dev/null || echo 'run: source ~/.bashrc')"
-echo "Rust: $(su - abc -c 'source ~/.cargo/env && rustc --version' 2>/dev/null || echo 'run: source ~/.cargo/env')"
-echo "Node.js: $(node --version)"
-echo "Claude: $(claude --version)"
-echo "VS Code extensions: Python, Python Debugger, Rust Analyzer, Claude Code"
+python3.12 --version
+python3.13 --version
+/config/.local/bin/poetry --version || true
+node --version
+claude --version
 
 echo ""
 echo "=== Setup complete! ==="
@@ -126,6 +148,6 @@ echo "Access desktop at: http://localhost:3000"
 echo "SSH access: ssh abc@localhost -p 2222 (password: isoclaude)"
 echo ""
 echo "All installations persist across restarts"
-echo "IMPORTANT: Change the default SSH password with 'passwd abc'"
+echo "IMPORTANT: Change the default SSH password with passwd"
 
 exit 0

@@ -50,23 +50,25 @@ The launcher is your main interface—an interactive menu that lets you pick a p
 ![Claude Launcher](media/terminal.png)
 
 ```bash
-# Via isoclaude.sh
-./isoclaude.sh claude                    # Interactive project & mode selection
+# From within a project directory (auto-detects, just asks for mode)
+cd ~/projects/MyApp
+./isoclaude.sh claude                    # Detects MyApp, asks Normal/Dangerous
 ./isoclaude.sh claude --resume           # Resume previous conversation
-./isoclaude.sh claude --continue         # Continue last session
 ./isoclaude.sh claude -p "build a REST API"  # Start with a prompt
 
+# From elsewhere (shows project picker first)
+./isoclaude.sh claude                    # Pick project, then mode
+
 # Or call the launcher directly
-./claude-launch.sh                       # Same interactive experience
-./claude-launch.sh --resume              # Resume with picker
-./claude-launch.sh -p "fix all tests"    # Start with prompt
+./claude-launch.sh                       # Same behavior
 ```
 
 The launcher:
 1. Auto-starts the container if not running
-2. Shows all mounted projects with git status indicators
-3. Lets you choose Normal or Dangerous mode
-4. Passes any extra arguments directly to Claude
+2. Auto-detects project if you're inside a configured project directory
+3. Shows project picker only when needed
+4. Lets you choose Normal or Dangerous mode
+5. Passes any extra arguments directly to Claude
 
 Use arrow keys to navigate, Enter to select.
 
@@ -102,13 +104,17 @@ By default, IsoClaude excludes `.git` folders—Claude works on your code but ca
 | `./isoclaude.sh up` | Start the container |
 | `./isoclaude.sh down` | Stop the container (data persists) |
 | `./isoclaude.sh setup` | Install Python, Poetry, Rust, Node, Claude CLI |
-| `./isoclaude.sh bash` | Connect to container bash shell |
+| `./isoclaude.sh bash [project]` | Bash shell in project (auto-detects from cwd) |
+| `./isoclaude.sh code [project]` | VS Code remote to project (auto-detects from cwd) |
+| `./isoclaude.sh windsurf [project]` | Windsurf remote to project (auto-detects from cwd) |
 | `./isoclaude.sh claude [args]` | Launch Claude in a project |
 | `./claude-launch.sh [args]` | Direct launcher (same as above) |
 | `./isoclaude.sh projects:list` | Show configured projects |
 | `./isoclaude.sh projects:add` | Add a project mount |
 | `./isoclaude.sh projects:remove` | Remove a project mount |
 | `./isoclaude.sh regenerate` | Rebuild docker-compose.yml |
+
+The `bash`, `code`, and `windsurf` commands auto-detect the project if you're inside a configured project directory. Otherwise, they show an interactive picker.
 
 ## What's Installed
 
@@ -130,6 +136,42 @@ After `./isoclaude.sh setup`:
 | Shell | `./isoclaude.sh bash` | Direct access |
 
 > **First thing**: Change the default SSH password with `passwd`
+
+### IDE Integration (VS Code / Windsurf)
+
+Connect your local IDE to projects inside the container:
+
+```bash
+# From within a project directory (auto-detects project)
+cd ~/projects/MyApp
+./isoclaude.sh code              # Opens VS Code
+./isoclaude.sh windsurf          # Opens Windsurf
+
+# Or specify project explicitly
+./isoclaude.sh code MyApp
+./isoclaude.sh windsurf MyApp
+```
+
+Requires the "Remote - SSH" extension installed in your IDE.
+
+**CLI Setup** (if `code` or `windsurf` commands aren't found):
+
+**macOS:**
+```bash
+# VS Code: Install "Shell Command: Install 'code' command in PATH" from Command Palette
+# Windsurf:
+export PATH="$PATH:/Applications/Windsurf.app/Contents/Resources/app/bin"
+```
+
+**Windows (add to PATH):**
+```
+%LOCALAPPDATA%\Programs\Windsurf\resources\app\bin
+```
+
+**Linux:**
+```bash
+export PATH="$PATH:/opt/Windsurf/resources/app/bin"
+```
 
 ## Persistence
 
