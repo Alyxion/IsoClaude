@@ -6,7 +6,7 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 
 ## Key Files
 
-- `isoclaude.sh` - Main control script (up/down/setup/regenerate/projects:*)
+- `isoclaude.sh` - Main control script (all commands in one file)
 - `scripts/setup-container.sh` - Dev tools installer run inside container
 - `projects.conf` - User's project mount configuration (gitignored)
 - `projects.conf.example` - Template for new users
@@ -15,11 +15,28 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 ## Commands
 
 ```bash
-./isoclaude.sh up          # Start container
-./isoclaude.sh down        # Stop container
-./isoclaude.sh setup       # Install Python/Poetry/Claude
-./isoclaude.sh regenerate  # Rebuild compose from projects.conf
+./isoclaude.sh up              # Start container
+./isoclaude.sh down            # Stop container
+./isoclaude.sh setup           # Install Python/Poetry/Claude
+./isoclaude.sh browser         # Open desktop in browser
+./isoclaude.sh regenerate      # Rebuild compose from projects.conf
+./isoclaude.sh claude          # Launch Claude CLI
+./isoclaude.sh bash            # Bash shell in project
+./isoclaude.sh code            # VS Code remote
+./isoclaude.sh windsurf        # Windsurf remote
 ```
+
+## Port Mappings
+
+| Container | Host | Service |
+|-----------|------|---------|
+| 3000 | 3000 | Desktop (noVNC) |
+| 22 | 2222 | SSH |
+| 8080 | 8090 | Python/NiceGUI HTTP |
+| 8443 | 8453 | Python/NiceGUI HTTPS |
+| 8501 | 8511 | Streamlit |
+| 3001 | 3010 | Node.js |
+| 5000 | 5010 | Flask |
 
 ## Important Notes
 
@@ -49,6 +66,7 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 ### Adding Features to isoclaude.sh
 - Keep POSIX-compatible bash
 - Update help text in `cmd_help()`
+- Add case in main switch at bottom
 - Test with both new and existing setups
 
 ### Changing scripts/setup-container.sh
@@ -56,9 +74,11 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 - Poetry installs to `/config/.local/bin`
 - Consider idempotency (script may run multiple times)
 
-### Volume Changes
-- Adding new volumes requires `docker compose down -v` to take effect properly
-- Document any new volumes in AGENTS.md
+### Volume/Port Changes
+- Config changes auto-apply on next command (container auto-restarts)
+- Adding new volumes requires `docker compose down -v` to take effect
+- Update port mappings in `generate_compose()` function
+- Document changes in README.md
 
 ## Testing Changes
 
@@ -73,7 +93,7 @@ docker compose -f docker-compose.yml down -v  # Remove volumes
 # Persistence test
 ./isoclaude.sh down
 ./isoclaude.sh up
-docker exec ubuntu-desktop python3.12 --version  # Should work
+docker exec iso-claude-ubuntu python3.12 --version  # Should work
 ```
 
 ## Don't Commit
