@@ -92,11 +92,17 @@ Use arrow keys to navigate, Enter to select.
 # List configured projects
 isoclaude projects:list
 
-# Add projects (excludes .git by default for safety)
+# Add project (excludes .git by default, chrome enabled by default)
 isoclaude projects:add ~/projects/MyApp
 
-# Add with git access (for commits/pushes)
-isoclaude projects:add ~/projects/OpenSource true
+# Add/update with git access (for commits/pushes)
+isoclaude projects:add ~/projects/MyApp --git true
+
+# Disable chrome MCP for a project
+isoclaude projects:add ~/projects/MyApp --chrome false
+
+# Combine flags
+isoclaude projects:add ~/projects/MyApp --git true --chrome true
 
 # Remove by name or path
 isoclaude projects:remove MyApp
@@ -108,7 +114,11 @@ Projects mount to `/projects/<folder_name>` inside the container.
 
 ### Git Isolation
 
-By default, IsoClaude excludes `.git` folders—Claude works on your code but can't mess with your commit history. Set `include_git` to `true` when you want Claude to make commits.
+By default, IsoClaude excludes `.git` folders—Claude works on your code but can't mess with your commit history. Set `--git true` when you want Claude to make commits.
+
+### Chrome MCP
+
+By default, Chrome browser automation is enabled (`--chrome true`). This adds `--mcp claude-in-chrome` when launching Claude, allowing browser control capabilities. Set `--chrome false` to disable.
 
 ## Commands
 

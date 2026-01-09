@@ -49,11 +49,24 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 - Only `docker compose down -v` destroys data
 - Installed software (apt, pip, npm) persists
 
-### projects.conf Format
+### projects.conf Format (TOML)
+```toml
+[ProjectName]
+path = /full/path/to/project
+git = true|false
+chrome = true|false
+
+# Example:
+[MyApp]
+path = /Users/someone/projects/MyApp
+git = false
+chrome = true
 ```
-# /path/to/project:include_git (true/false)
-/Users/someone/projects/MyApp:false
-```
+
+- `git = true` - Include .git folder (for commits/pushes)
+- `chrome = true` - Enable Chrome MCP when launching Claude
+
+Note: Old format (`/path:bool`) is auto-migrated on first use.
 
 ### Container Details
 - Image: `lscr.io/linuxserver/webtop:ubuntu-kde`

@@ -1,13 +1,28 @@
-# IsoClaude Project Mounts Configuration
+# IsoClaude Project Configuration (TOML format)
+#
 # Copy this file to projects.conf and customize
 #
-# Format: /path/to/project:include_git
-#   - include_git: true = mount .git folder, false = exclude .git
+# Format:
+# [ProjectName]
+# path = /full/path/to/project
+# git = true|false
+# chrome = true|false
 #
-# Examples:
-# /Users/yourname/projects/MyApp:false
-# /Users/yourname/projects/OpenSource:true
+# The project name (section header) determines the mount point:
+#   /projects/<ProjectName> inside the container
 #
-# Projects are mounted to /projects/<folder_name> in the container
+# git = true    -> .git folder is accessible (for commits/pushes)
+# git = false   -> .git folder is excluded (safe isolation, default)
+# chrome = true -> Enable Chrome MCP when launching Claude (default)
 
-# Add your projects below:
+# Examples:
+
+# [MyApp]
+# path = /Users/yourname/projects/MyApp
+# git = false
+# chrome = true
+
+# [LegacyProject]
+# path = /Users/yourname/projects/LegacyProject
+# git = true
+# chrome = false
