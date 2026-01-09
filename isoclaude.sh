@@ -107,9 +107,13 @@ VOLUMES
 # --- Container management ---
 
 check_container() {
+    # Always check for config changes first
+    auto_regenerate
+
     if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
         echo -e "${YELLOW}Container not running. Starting...${RESET}"
-        cmd_up
+        [[ ! -f "$COMPOSE_FILE" ]] && generate_compose
+        docker compose -f "$COMPOSE_FILE" up -d
         echo -n "Waiting for container"
         for i in {1..30}; do
             if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
@@ -760,11 +764,8 @@ cmd_claude() {
         echo "Mode: Normal"
     fi
 
-    # Build MCP flags
-    local mcp_flags=""
     if [[ "$project_chrome" == "true" ]]; then
-        mcp_flags="--mcp claude-in-chrome"
-        echo -e "${CYAN}Chrome: enabled${RESET}"
+        echo -e "${CYAN}Chrome: enabled (configure MCP in Claude settings)${RESET}"
     fi
 
     if [[ ${#extra_args[@]} -gt 0 ]]; then
@@ -772,7 +773,7 @@ cmd_claude() {
     fi
     echo ""
 
-    local claude_cmd="claude $CLAUDE_MODE $mcp_flags ${extra_args[*]}"
+    local claude_cmd="claude $CLAUDE_MODE ${extra_args[*]}"
 
     docker exec -it -u abc -e HOME=/config -w "$project_path" "$CONTAINER_NAME" \
         /bin/bash -c "source /etc/profile.d/poetry.sh 2>/dev/null; source ~/.bashrc 2>/dev/null; $claude_cmd"
