@@ -17,6 +17,7 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 ```bash
 ./isoclaude.sh up              # Start container
 ./isoclaude.sh down            # Stop container
+./isoclaude.sh restart         # Rebuild container with current config
 ./isoclaude.sh setup           # Install Python/Poetry/Claude
 ./isoclaude.sh browser         # Open desktop in browser
 ./isoclaude.sh regenerate      # Rebuild compose from projects.conf
@@ -48,6 +49,9 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 - All volumes persist across down/up cycles
 - Only `docker compose down -v` destroys data
 - Installed software (apt, pip, npm) persists
+- Browser configs (Chrome, Chromium) have dedicated volumes
+- VS Code settings and extensions have dedicated volumes
+- Config changes only apply after successful container rebuild (checksum-based)
 
 ### projects.conf Format (TOML)
 ```toml
@@ -114,3 +118,8 @@ docker exec iso-claude-ubuntu python3.12 --version  # Should work
 These files are gitignored and contain user-specific paths:
 - `projects.conf`
 - `docker-compose.yml`
+- `.config_checksum`
+
+## Documentation
+
+Keep `README.md` in sync with any user-facing changes (commands, features, behavior). The README should stay concise and focused on usage—implementation details belong in CLAUDE.md.

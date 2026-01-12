@@ -76,6 +76,12 @@ apt-get update
 apt-get install -y code
 
 echo "=== Installing VS Code extensions ==="
+# Fix ownership of config directories (volumes may be created as root)
+mkdir -p /config/.config/Code /config/.vscode
+mkdir -p /config/.config/google-chrome /config/.config/chromium
+chown -R abc:abc /config/.config/Code /config/.vscode
+chown -R abc:abc /config/.config/google-chrome /config/.config/chromium
+
 # Run as abc user since VS Code extensions install to user profile
 su - abc -c "code --install-extension ms-python.python"
 su - abc -c "code --install-extension ms-python.debugpy"
@@ -133,6 +139,31 @@ chmod +x /config/custom-cont-init.d/99-start-ssh
 # Start SSH now
 mkdir -p /var/run/sshd
 /usr/sbin/sshd || true
+
+echo "=== Installing Claude in Chrome extension ==="
+# Extension ID from Chrome Web Store: https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn
+CLAUDE_EXTENSION_ID="fcoeoabgfenejglbffodgkkbkcdhcgfn"
+EXTENSION_UPDATE_URL="https://clients2.google.com/service/update2/crx"
+
+# Create policy directories for both Chromium and Chrome
+mkdir -p /etc/chromium/policies/managed
+mkdir -p /etc/opt/chrome/policies/managed
+
+# Create policy JSON to force-install Claude in Chrome extension
+POLICY_JSON=$(cat <<EOF
+{
+    "ExtensionInstallForcelist": [
+        "${CLAUDE_EXTENSION_ID};${EXTENSION_UPDATE_URL}"
+    ]
+}
+EOF
+)
+
+echo "$POLICY_JSON" > /etc/chromium/policies/managed/claude-extension.json
+echo "$POLICY_JSON" > /etc/opt/chrome/policies/managed/claude-extension.json
+
+echo "Claude in Chrome extension will be installed on first browser launch"
+echo "Note: You'll need to log in to Claude on first use (credentials persist after)"
 
 echo "=== Verifying installations ==="
 python3.12 --version

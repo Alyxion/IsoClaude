@@ -5,6 +5,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 PROJECTS_CONF="$SCRIPT_DIR/projects.conf"
+CONFIG_CHECKSUM_FILE="$SCRIPT_DIR/.config_checksum"
 CONTAINER_NAME="iso-claude-ubuntu"
 
 # Colors
@@ -17,6 +18,26 @@ RESET='\033[0m'
 
 # --- Compose generation ---
 
+get_config_checksum() {
+    if [[ -f "$PROJECTS_CONF" ]]; then
+        md5 -q "$PROJECTS_CONF" 2>/dev/null || md5sum "$PROJECTS_CONF" 2>/dev/null | cut -d' ' -f1
+    else
+        echo ""
+    fi
+}
+
+get_saved_checksum() {
+    if [[ -f "$CONFIG_CHECKSUM_FILE" ]]; then
+        cat "$CONFIG_CHECKSUM_FILE"
+    else
+        echo ""
+    fi
+}
+
+save_checksum() {
+    get_config_checksum > "$CONFIG_CHECKSUM_FILE"
+}
+
 conf_changed() {
     if [[ ! -f "$COMPOSE_FILE" ]]; then
         return 0
@@ -24,7 +45,10 @@ conf_changed() {
     if [[ ! -f "$PROJECTS_CONF" ]]; then
         return 1
     fi
-    [[ "$PROJECTS_CONF" -nt "$COMPOSE_FILE" ]]
+    local current_checksum saved_checksum
+    current_checksum="$(get_config_checksum)"
+    saved_checksum="$(get_saved_checksum)"
+    [[ "$current_checksum" != "$saved_checksum" ]]
 }
 
 auto_regenerate() {
@@ -36,6 +60,12 @@ auto_regenerate() {
             echo -e "${YELLOW}Restarting container to apply changes...${RESET}"
             docker compose -f "$COMPOSE_FILE" down
             docker compose -f "$COMPOSE_FILE" up -d
+            # Only save checksum after successful rebuild
+            save_checksum
+            echo -e "${GREEN}Config applied successfully.${RESET}"
+        else
+            echo -e "${YELLOW}Container not running. Changes will apply on next start.${RESET}"
+            echo -e "${YELLOW}Run 'isoclaude restart' to rebuild with new config.${RESET}"
         fi
     fi
 }
@@ -68,6 +98,11 @@ services:
       - ubuntu-opt:/opt
       - ubuntu-var:/var
       - ubuntu-root:/root
+      # Browser and IDE configs (explicit volumes for persistence across rebuilds)
+      - chrome-config:/config/.config/google-chrome
+      - chromium-config:/config/.config/chromium
+      - vscode-config:/config/.config/Code
+      - vscode-extensions:/config/.vscode
       - ./scripts/setup-container.sh:/setup-container.sh:ro
 HEADER
 
@@ -95,6 +130,10 @@ volumes:
   ubuntu-opt:
   ubuntu-var:
   ubuntu-root:
+  chrome-config:
+  chromium-config:
+  vscode-config:
+  vscode-extensions:
 VOLUMES
 
     for ((i=0; i<volume_count; i++)); do
@@ -132,9 +171,27 @@ cmd_up() {
     auto_regenerate
     [[ ! -f "$COMPOSE_FILE" ]] && generate_compose
     docker compose -f "$COMPOSE_FILE" up -d
+    # Save checksum now that container is up with current config
+    save_checksum
     echo ""
     echo "Ubuntu Desktop: http://localhost:3000"
     echo "Run './isoclaude.sh setup' to install dev tools (first time only)"
+}
+
+cmd_restart() {
+    echo -e "${YELLOW}Rebuilding container...${RESET}"
+    [[ ! -f "$COMPOSE_FILE" ]] && generate_compose
+    # Always regenerate if config exists
+    if [[ -f "$PROJECTS_CONF" ]]; then
+        generate_compose
+    fi
+    docker compose -f "$COMPOSE_FILE" down
+    docker compose -f "$COMPOSE_FILE" up -d
+    # Save checksum after successful rebuild
+    save_checksum
+    echo -e "${GREEN}Container rebuilt successfully.${RESET}"
+    echo ""
+    echo "Ubuntu Desktop: http://localhost:3000"
 }
 
 cmd_down() {
@@ -153,9 +210,12 @@ cmd_regenerate() {
         echo -e "${YELLOW}Restarting container to apply changes...${RESET}"
         docker compose -f "$COMPOSE_FILE" down
         docker compose -f "$COMPOSE_FILE" up -d
+        # Save checksum after successful rebuild
+        save_checksum
         echo -e "${GREEN}Done.${RESET}"
     else
         echo "Changes will apply when container starts."
+        echo "Run 'isoclaude restart' to rebuild with new config."
     fi
 }
 
@@ -826,6 +886,7 @@ Setup alias (copy & paste):
 Container:
   up              Start the container
   down            Stop the container (data persists)
+  restart         Stop and rebuild container with current config
   setup           Install Python, Poetry, Rust, Node, Claude CLI
   regenerate      Rebuild docker-compose.yml from projects.conf
   browser [url]   Open browser (default: http://localhost:3000)
@@ -872,6 +933,7 @@ HELP
 case "${1:-}" in
     up) cmd_up ;;
     down) cmd_down ;;
+    restart) cmd_restart ;;
     setup) cmd_setup ;;
     regenerate) cmd_regenerate ;;
     browser|open) cmd_browser "$2" ;;

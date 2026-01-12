@@ -120,12 +120,30 @@ By default, IsoClaude excludes `.git` folders—Claude works on your code but ca
 
 By default, Chrome browser automation is enabled (`--chrome true`). This adds `--mcp claude-in-chrome` when launching Claude, allowing browser control capabilities. Set `--chrome false` to disable.
 
+### Claude in Chrome Extension
+
+The [Claude in Chrome](https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn) extension is pre-installed. On first use:
+
+1. Open Chrome in the desktop (http://localhost:3000)
+2. Click the Claude extension icon in the toolbar
+3. Log in to your Claude account (Pro, Max, Team, or Enterprise required)
+
+Your login persists across container restarts. Once connected, Claude Code can:
+- Navigate websites, click buttons, fill forms
+- Read console logs and network requests for debugging
+- Take screenshots to verify UI changes
+- Test your web apps running in the container
+- Run multi-step browser workflows autonomously
+
+This creates a powerful build-test-verify loop: Claude Code builds your app, then uses the browser to test it and debug issues—all without leaving the terminal.
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `isoclaude up` | Start the container |
 | `isoclaude down` | Stop the container (data persists) |
+| `isoclaude restart` | Rebuild container with current config |
 | `isoclaude setup` | Install Python, Poetry, Rust, Node, Claude CLI |
 | `isoclaude browser [url]` | Open desktop in browser (default: localhost:3000) |
 | `isoclaude bash [project]` | Bash shell in project (auto-detects from cwd) |
@@ -165,6 +183,7 @@ After `./isoclaude.sh setup`:
 - **Node.js** 20 + npm
 - **Claude Code CLI** with `clauded` alias
 - **VS Code** with Python, Rust Analyzer, and Claude Code extensions
+- **Claude in Chrome** extension (log in on first use, credentials persist)
 
 ## Access Methods
 
@@ -217,6 +236,7 @@ export PATH="$PATH:/opt/Windsurf/resources/app/bin"
 Everything survives restarts:
 - Installed packages (apt, pip, npm, cargo)
 - VS Code extensions and settings
+- Chrome/Chromium profiles and login credentials
 - Claude conversation history
 - Your project files (mounted from host)
 

@@ -1,6 +1,7 @@
 # IsoClaude - user-specific files
 projects.conf
 docker-compose.yml
+.config_checksum
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
