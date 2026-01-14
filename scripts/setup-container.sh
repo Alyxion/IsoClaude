@@ -5,7 +5,18 @@
 set -e
 
 echo "=== Updating package lists ==="
-apt-get update
+if ! apt-get update; then
+    echo "=== Primary mirror failed, trying ports.ubuntu.com fallback ==="
+    ARCH=$(dpkg --print-architecture)
+    if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ]; then
+        sed -i 's|http://archive.ubuntu.com/ubuntu|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list.d/*.list 2>/dev/null || true
+        sed -i 's|http://archive.ubuntu.com/ubuntu|http://ports.ubuntu.com/ubuntu-ports|g' /etc/apt/sources.list 2>/dev/null || true
+        apt-get update
+    else
+        echo "Not an ARM system, cannot use ports fallback"
+        exit 1
+    fi
+fi
 
 echo "=== Installing prerequisites ==="
 apt-get install -y \
@@ -46,12 +57,24 @@ curl -sS https://bootstrap.pypa.io/get-pip.py | python3.13
 echo "=== Installing Poetry ==="
 curl -sSL https://install.python-poetry.org | python3.12 -
 
-# Add poetry to PATH
+# Add poetry to PATH and disable lsiopy venv
+# lsiopy is a read-only venv from LinuxServer.io that breaks Poetry installs
 POETRY_PATH='export PATH="/config/.local/bin:$PATH"'
+LSIOPY_PATH_FIX='export PATH="${PATH//:\/lsiopy\/bin/}"'
+LSIOPY_VENV_FIX='unset VIRTUAL_ENV'
 if ! grep -q "poetry" /config/.bashrc 2>/dev/null; then
     echo "$POETRY_PATH" >> /config/.bashrc
 fi
-echo 'export PATH="/config/.local/bin:$PATH"' > /etc/profile.d/poetry.sh
+if ! grep -q "lsiopy" /config/.bashrc 2>/dev/null; then
+    echo "$LSIOPY_PATH_FIX" >> /config/.bashrc
+    echo "$LSIOPY_VENV_FIX" >> /config/.bashrc
+fi
+cat > /etc/profile.d/poetry.sh <<'EOF'
+export PATH="/config/.local/bin:$PATH"
+# Disable lsiopy venv - it's read-only and breaks Poetry
+export PATH="${PATH//:\/lsiopy\/bin/}"
+unset VIRTUAL_ENV
+EOF
 
 # Add clauded alias for skipping permissions
 if ! grep -q "clauded" /config/.bashrc 2>/dev/null; then
@@ -76,11 +99,13 @@ apt-get update
 apt-get install -y code
 
 echo "=== Installing VS Code extensions ==="
-# Fix ownership of config directories (volumes may be created as root)
+# Fix ownership of config directories (volumes may be created as root, setup runs as root)
 mkdir -p /config/.config/Code /config/.vscode
 mkdir -p /config/.config/google-chrome /config/.config/chromium
+mkdir -p /config/.cache/pip /config/.cache/pypoetry /config/.local
 chown -R abc:abc /config/.config/Code /config/.vscode
 chown -R abc:abc /config/.config/google-chrome /config/.config/chromium
+chown -R abc:abc /config/.cache /config/.local
 
 # Run as abc user since VS Code extensions install to user profile
 su - abc -c "code --install-extension ms-python.python"
