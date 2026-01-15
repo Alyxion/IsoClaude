@@ -50,6 +50,9 @@ apt-get install -y python3.12 python3.12-venv python3.12-dev python3.12-tk
 echo "=== Installing Python 3.13 with tkinter ==="
 apt-get install -y python3.13 python3.13-venv python3.13-dev python3.13-tk
 
+# Create 'python' symlink (Ubuntu doesn't have this by default, Poetry needs it)
+ln -sf python3 /usr/bin/python
+
 echo "=== Installing pip for both Python versions ==="
 curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
 curl -sS https://bootstrap.pypa.io/get-pip.py | python3.13
@@ -57,29 +60,32 @@ curl -sS https://bootstrap.pypa.io/get-pip.py | python3.13
 echo "=== Installing Poetry ==="
 curl -sSL https://install.python-poetry.org | python3.12 -
 
-# Add poetry to PATH and disable lsiopy venv
-# lsiopy is a read-only venv from LinuxServer.io that breaks Poetry installs
-POETRY_PATH='export PATH="/config/.local/bin:$PATH"'
-LSIOPY_PATH_FIX='export PATH="${PATH//:\/lsiopy\/bin/}"'
-LSIOPY_VENV_FIX='unset VIRTUAL_ENV'
-if ! grep -q "poetry" /config/.bashrc 2>/dev/null; then
-    echo "$POETRY_PATH" >> /config/.bashrc
-fi
-if ! grep -q "lsiopy" /config/.bashrc 2>/dev/null; then
-    echo "$LSIOPY_PATH_FIX" >> /config/.bashrc
-    echo "$LSIOPY_VENV_FIX" >> /config/.bashrc
-fi
+# Configure Poetry - disable in-project venvs (Poetry 2.2.x bug workaround)
+/config/.local/bin/poetry config virtualenvs.in-project false
+
+# Configure shell environment (overwrites to avoid duplicates on re-run)
+# Disable lsiopy venv - it's read-only and breaks Poetry installs
+cat > /config/.bashrc <<'BASHRC'
+# Poetry and local binaries
+export PATH="/config/.local/bin:$PATH"
+
+# Cargo/Rust
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# Disable lsiopy venv (read-only, breaks Poetry)
+export PATH="${PATH//:\/lsiopy\/bin/}"
+unset VIRTUAL_ENV
+
+# Aliases
+alias clauded="claude --dangerously-skip-permissions"
+BASHRC
+
 cat > /etc/profile.d/poetry.sh <<'EOF'
 export PATH="/config/.local/bin:$PATH"
 # Disable lsiopy venv - it's read-only and breaks Poetry
 export PATH="${PATH//:\/lsiopy\/bin/}"
 unset VIRTUAL_ENV
 EOF
-
-# Add clauded alias for skipping permissions
-if ! grep -q "clauded" /config/.bashrc 2>/dev/null; then
-    echo 'alias clauded="claude --dangerously-skip-permissions"' >> /config/.bashrc
-fi
 
 echo "=== Installing Rust ==="
 # Install Rust for abc user
@@ -102,7 +108,7 @@ echo "=== Installing VS Code extensions ==="
 # Fix ownership of config directories (volumes may be created as root, setup runs as root)
 mkdir -p /config/.config/Code /config/.vscode
 mkdir -p /config/.config/google-chrome /config/.config/chromium
-mkdir -p /config/.cache/pip /config/.cache/pypoetry /config/.local
+mkdir -p /config/.cache/pip /config/.cache/pypoetry/virtualenvs /config/.local
 chown -R abc:abc /config/.config/Code /config/.vscode
 chown -R abc:abc /config/.config/google-chrome /config/.config/chromium
 chown -R abc:abc /config/.cache /config/.local

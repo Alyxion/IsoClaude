@@ -25,6 +25,9 @@ IsoClaude is a Docker-based isolated Ubuntu desktop environment for Claude devel
 ./isoclaude.sh bash            # Bash shell in project
 ./isoclaude.sh code            # VS Code remote
 ./isoclaude.sh windsurf        # Windsurf remote
+./isoclaude.sh arch            # Show current CPU architecture
+./isoclaude.sh arch amd64      # Switch to amd64 emulation
+./isoclaude.sh arch native     # Switch to native (default)
 ```
 
 ## Port Mappings
@@ -78,6 +81,22 @@ Note: Old format (`/path:bool`) is auto-migrated on first use.
 - Home directory inside container: `/config`
 - Projects mount to: `/projects/<folder_name>`
 
+### CPU Architecture
+Two independent environments that can run in parallel:
+
+- **native** (default): Uses host CPU, faster performance
+  - Container: `iso-claude-ubuntu`
+  - Ports: 3000, 2222, 8090, 8453, 8511, 3010, 5010
+  - Compose: `docker-compose.yml`
+
+- **amd64**: Emulates x86_64 via Docker's QEMU
+  - Container: `iso-claude-ubuntu-amd64`
+  - Ports: 3100, 2322, 8190, 8553, 8611, 3110, 5110
+  - Compose: `docker-compose-amd64.yml`
+
+Setting stored in `.arch` file. Use `isoclaude arch` to see status of both.
+Setup runs automatically on first use of each environment.
+
 ## When Modifying
 
 ### Adding Features to isoclaude.sh
@@ -115,10 +134,15 @@ docker exec iso-claude-ubuntu python3.12 --version  # Should work
 
 ## Don't Commit
 
-These files are gitignored and contain user-specific paths:
+These files are gitignored and contain user-specific settings:
 - `projects.conf`
 - `docker-compose.yml`
+- `docker-compose-amd64.yml`
 - `.config_checksum`
+- `.config_checksum_amd64`
+- `.setup_native`
+- `.setup_amd64`
+- `.arch`
 
 ## Documentation
 

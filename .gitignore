@@ -1,7 +1,12 @@
 # IsoClaude - user-specific files
 projects.conf
 docker-compose.yml
+docker-compose-amd64.yml
 .config_checksum
+.config_checksum_amd64
+.setup_native
+.setup_amd64
+.arch
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -120,6 +120,31 @@ By default, IsoClaude excludes `.git` folders—Claude works on your code but ca
 
 By default, Chrome browser automation is enabled (`--chrome true`). This adds `--mcp claude-in-chrome` when launching Claude, allowing browser control capabilities. Set `--chrome false` to disable.
 
+### CPU Architecture
+
+IsoClaude supports two independent environments that can run in parallel:
+
+```bash
+# Show status of both environments
+isoclaude arch
+
+# Switch active environment to amd64
+isoclaude arch amd64
+isoclaude up
+
+# Switch back to native
+isoclaude arch native
+isoclaude up
+```
+
+| Environment | Desktop | SSH | HTTP | Description |
+|------------|---------|-----|------|-------------|
+| **native** | :3000 | :2222 | :8090 | Host CPU (faster) |
+| **amd64** | :3100 | :2322 | :8190 | x86_64 emulated |
+
+Both environments have completely separate volumes and can run simultaneously.
+Setup runs automatically on first use of each environment.
+
 ### Claude in Chrome Extension
 
 The [Claude in Chrome](https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn) extension is pre-installed. On first use:
@@ -153,25 +178,28 @@ This creates a powerful build-test-verify loop: Claude Code builds your app, the
 | `isoclaude projects:list` | Show configured projects |
 | `isoclaude projects:add` | Add a project mount |
 | `isoclaude projects:remove` | Remove a project mount |
+| `isoclaude arch` | Show status of both environments |
+| `isoclaude arch native` | Switch to native (faster, default) |
+| `isoclaude arch amd64` | Switch to amd64 (x86_64 emulated) |
 | `isoclaude regenerate` | Rebuild docker-compose.yml |
 
 The `bash`, `code`, `windsurf`, and `claude` commands auto-detect the project if you're inside a configured project directory. Otherwise, they show an interactive picker.
 
 ## Port Mappings
 
-Applications running inside the container are accessible on your host with a port offset:
+Applications running inside the container are accessible on your host:
 
-| Service | Container Port | Host Port |
-|---------|---------------|-----------|
-| Desktop (noVNC) | 3000 | 3000 |
-| SSH | 22 | 2222 |
-| Python/NiceGUI HTTP | 8080 | 8090 |
-| Python/NiceGUI HTTPS | 8443 | 8453 |
-| Streamlit | 8501 | 8511 |
-| Node.js | 3001 | 3010 |
-| Flask | 5000 | 5010 |
+| Service | Container | Native Host | AMD64 Host |
+|---------|-----------|-------------|------------|
+| Desktop (noVNC) | 3000 | 3000 | 3100 |
+| SSH | 22 | 2222 | 2322 |
+| Python/NiceGUI HTTP | 8080 | 8090 | 8190 |
+| Python/NiceGUI HTTPS | 8443 | 8453 | 8553 |
+| Streamlit | 8501 | 8511 | 8611 |
+| Node.js | 3001 | 3010 | 3110 |
+| Flask | 5000 | 5010 | 5110 |
 
-Example: Run NiceGUI on port 8080 inside container, access at `http://localhost:8090`
+Example: Run NiceGUI on port 8080, access at `localhost:8090` (native) or `localhost:8190` (amd64)
 
 ## What's Installed
 
